@@ -1,0 +1,8 @@
+*~
+*.o
+*.d
+*.a
+.*.swp
+
+specs
+src/obj
