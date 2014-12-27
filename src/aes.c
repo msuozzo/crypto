@@ -4,7 +4,7 @@
 
 
 // 4*Nk -> Nb*(Nr+1)
-byte *expand_key(byte *key, byte *expansion, int Nk) {
+void expand_key(byte *key, byte *expansion, int Nk) {
   int Nr = Nk + 6;
   byte *temp_word;
   int i;
@@ -40,14 +40,13 @@ byte *expand_key(byte *key, byte *expansion, int Nk) {
     }
     //expansion[4*i] = expansion[4*(i-Nk)] ^ temp;
   }
-  return NULL;
 }
 
 /*
  * Implements a single encryption block
  */
 void encrypt_block(byte *sbox, byte *key, int Nr) {
-  int r, i, j;
+  int r, i;
   byte *tmp, *s, *sp;
   // temporary sboxes
   byte tmp_sbox1[16] = {0};
@@ -109,7 +108,7 @@ byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t ke
   } else if (key_len == AES_256) {
     Nk = 8;
   } else {
-    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
+    fprintf(stderr, "Unsupported aes_key_len_t provided: %d\n", mode);
     goto exit;
   }
   Nr = Nk + 6;
@@ -118,29 +117,37 @@ byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t ke
     fprintf(stderr, "Cannot encrypt 0 bytes\n");
     goto exit;
   }
-  // Allocate state array
-  byte state[STATEROWS * STATECOLS];
-  byte *sbox = state;
-  // Allocate output array
-  size_t ct_length = (pt_length / BLK_BYTES) * (BLK_BYTES + 1);
+  // Allocate output array and populate with plaintext
+  // PKCS#7 scheme used for padding -- all padding bytes equal to the number of
+  // padding bytes (e.g. ...01, ...02 02, ...03 03 03, ...04 04 04 04, etc.)
+  size_t ct_length = BLK_BYTES * (1 + pt_length / BLK_BYTES);
   byte *ciphertext = malloc(ct_length);
+  int i;
+  for (i = 0; i < pt_length; i++)
+    ciphertext[i] = plaintext[i];
+  for (; i < ct_length; i++)
+    ciphertext[i] = ct_length - pt_length;
   // Generate key schedule
-  key_sched = malloc(Nb*(Nr+1) * sizeof(word));
+  key_sched = malloc(4 * Nb * (Nr+1));
   expand_key(key, key_sched, Nk);
   // Process each block
-  for (int j = 0; j < 16; j++)
-    state[j] = plaintext[j];
-  encrypt_block(sbox, key_sched, Nr);
-  for (int i = 0; i < 16; i++) {
-    printf("%2x", state[i]);
-    if ((i-3) % 4 == 0)
-      printf("\n");
+  byte *sbox;
+  if (mode == AES_ECB) {
+    for (i = 0; i < ct_length / BLK_BYTES; i++) {
+      sbox = ciphertext + BLK_BYTES * i;
+      encrypt_block(sbox, key_sched, Nr);
+    }
+  } else if (mode == AES_CBC) {
+    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
+    goto free_buffers;
+  } else {
+    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
+    goto free_buffers;
   }
-  printf("\n");
-
-  
-free_sched:
+  return ciphertext;
+free_buffers:
   free(key_sched);
+  free(ciphertext);
 exit:
   return NULL;
 }
