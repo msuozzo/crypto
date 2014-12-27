@@ -3,7 +3,10 @@
 #include <stdlib.h>
 
 
-// 4*Nk -> Nb*(Nr+1)
+/*
+ * Implements the AES key expansion algorithm
+ * Converts key of length 4*Nk to a schedule of length 4*(Nr+1)
+ */
 void expand_key(byte *key, byte *expansion, int Nk) {
   int Nr = Nk + 6;
   byte *temp_word;

@@ -4,7 +4,7 @@
 
 #define KEY_LEN 128
 #define BLK_LEN 128
-#define BLK_BYTES 32
+#define BLK_BYTES 16
 #define Nb 4
 #define sub_bytes(x) sub_bytes_table[x>>4][x&0xf]
 #define gf_mult(x,y) gf_mult_table[x][y]
