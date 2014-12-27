@@ -1,5 +1,6 @@
 #ifndef AES_H
 #define AES_H
+#include <stddef.h>
 
 #define KEY_LEN 128
 #define BLK_LEN 128
@@ -12,7 +13,10 @@
 
 typedef unsigned char byte;
 typedef unsigned int word;
+typedef enum {AES_ECB, AES_CBC} aes_mode_t;
+typedef enum {AES_128, AES_192, AES_256} aes_key_len_t;
 
+// Taken from the SubBytes section (5.1.1) of the AES specification
 static byte sub_bytes_table[16][16] = {
   {0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76},
   {0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0},
@@ -32,7 +36,8 @@ static byte sub_bytes_table[16][16] = {
   {0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16}
 };
 
-// only populated with the rows used in MixColumns and InvMixColumns
+// Gallois Field (GF(2^8)) multiplication table populated with the rows of
+// the coefficient bytes used in MixColumns and InvMixColumns
 static byte gf_mult_table[16][256] = {
   {0},
   {0},
@@ -52,11 +57,11 @@ static byte gf_mult_table[16][256] = {
   {0}
 };
 
-// one should be the smaller (lower Hamming weight)
+// Gallois Field (GF(2^8)) multiplication function
+// The first parameter should be the smaller (lower Hamming weight) value
 static byte gf_mult_calc(word one, word two) {
   byte i, j;
   byte ret = one & 0x1 ? two : 0x0;
-  // set when shift exceeds byte capacity (ie leave GF(2^8))
   word tmp;
   for (i = 1; i < 8; i++) {
     if (one & (1<<i)) {
@@ -71,7 +76,8 @@ static byte gf_mult_calc(word one, word two) {
   return ret;
 }
 
-byte *encrypt(byte *plaintext, int pt_length, byte *key, int mode);
-byte *decrypt(byte *ciphertext, int ct_length, byte *key, int mode);
+
+byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t key_len, aes_mode_t mode);
+byte *aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, aes_key_len_t key_len, aes_mode_t mode);
 
 #endif
