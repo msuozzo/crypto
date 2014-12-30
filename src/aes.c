@@ -1,11 +1,12 @@
 #include "aes.h"
+#include "priv/priv_aes.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 
 /*
  * Implements the AES key expansion algorithm
- * Converts key of length 4*Nk to a schedule of length 4*(Nr+1)
+ * Converts key of length 4 * Nk to a schedule of 4 * (Nr + 1) words
  */
 void expand_key(byte *key, byte *expansion, int Nk) {
   int Nr = Nk + 6;
@@ -47,6 +48,13 @@ void expand_key(byte *key, byte *expansion, int Nk) {
 
 /*
  * Implements a single encryption block
+ *
+ * sbox -- state array initialized to the plaintext of the block
+ * key  -- key schedule for encryption of byte-length 4 * Nb * (Nr + 1)
+ * Nr   -- number of rounds associated with the key length (e.g. 10, 12, 14)
+ *
+ * On Success: sbox is populated with ciphertext
+ * On Error: No error case
  */
 void encrypt_block(byte *sbox, byte *key, int Nr) {
   int r, i;
@@ -95,12 +103,32 @@ void encrypt_block(byte *sbox, byte *key, int Nr) {
   }
 }
 
+/*
+ * Allocates buffer of necessary size to hold
+ */
+byte *allocate_output_buffer(size_t in_length, aes_mode_t mode) {
+  return malloc(BLK_BYTES * (1 + in_length / BLK_BYTES));
+}
+
+void free_output_buffer(byte *output_buffer) {
+  free(output_buffer);
+}
 
 /*
  * Implements the AES encryption function
+ *
+ * plaintext -- byte array to be encrypted
  * pt_length -- length of plaintext in bytes
+ * key       -- byte array of encryption key
+ * iv        -- initialization vector, ignored if the mode does not require one
+ * key_len   -- enum value of the key length in bits (e.g. 128, 192, etc.)
+ * mode      -- enum value of the encryption mode (e.g. ECB, CBC, etc.)
+ * ct_buffer -- byte array allocated by call to allocate_output_buffer
+ *
+ * On Success: returns the number of bytes written to ct_buffer
+ * On Error: returns -1
  */
-byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t key_len, aes_mode_t mode) {
+ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv, aes_key_len_t key_len, aes_mode_t mode, byte *ct_buffer) {
   // Select key length and initialize length-dependent values
   int Nk, Nr;
   byte *key_sched;
@@ -124,12 +152,11 @@ byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t ke
   // PKCS#7 scheme used for padding -- all padding bytes equal to the number of
   // padding bytes (e.g. ...01, ...02 02, ...03 03 03, ...04 04 04 04, etc.)
   size_t ct_length = BLK_BYTES * (1 + pt_length / BLK_BYTES);
-  byte *ciphertext = malloc(ct_length);
   int i;
   for (i = 0; i < pt_length; i++)
-    ciphertext[i] = plaintext[i];
+    ct_buffer[i] = plaintext[i];
   for (; i < ct_length; i++)
-    ciphertext[i] = ct_length - pt_length;
+    ct_buffer[i] = ct_length - pt_length;
   // Generate key schedule
   key_sched = malloc(4 * Nb * (Nr+1));
   expand_key(key, key_sched, Nk);
@@ -137,7 +164,7 @@ byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t ke
   byte *sbox;
   if (mode == AES_ECB) {
     for (i = 0; i < ct_length / BLK_BYTES; i++) {
-      sbox = ciphertext + BLK_BYTES * i;
+      sbox = ct_buffer + BLK_BYTES * i;
       encrypt_block(sbox, key_sched, Nr);
     }
   } else if (mode == AES_CBC) {
@@ -147,16 +174,14 @@ byte *aes_encrypt(byte *plaintext, size_t pt_length, byte *key, aes_key_len_t ke
     fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
     goto free_buffers;
   }
-  return ciphertext;
+  return ct_length;
 free_buffers:
   free(key_sched);
-  free(ciphertext);
 exit:
-  return NULL;
+  return -1;
 }
 
 
-
-byte *aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, aes_key_len_t key_len, aes_mode_t mode) {
-  return NULL;
+ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv, aes_key_len_t key_len, aes_mode_t mode, byte *pt_buffer) {
+  return 0;
 }

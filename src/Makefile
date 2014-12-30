@@ -1,22 +1,22 @@
-
-IDIR =../include
 CC=gcc
 CFLAGS=-I$(IDIR) -Wall -g
 
 ODIR=obj
-LDIR =../lib
+LDIR=../lib
+IDIR=../include
 
-LIBS=-lm
+LIBNAME=mycrypto
+LIBFILE=lib$(LIBNAME).a
+LIBS=-l$(LIBNAME)
 
-_DEPS = aes.h
+_DEPS = aes.h priv/priv_aes.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
-
-_OBJ = aes.o test.o
-OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
+_OBJS=aes.o
+OBJS=$(patsubst %,$(ODIR)/%,$(_OBJS))
 
 
 all: test
-.PHONY: clean obj
+.PHONY: clean obj lib
 
 obj:
 	mkdir -p obj
@@ -24,8 +24,15 @@ obj:
 $(ODIR)/%.o: %.c $(DEPS) obj
 		$(CC) -c -o $@ $< $(CFLAGS)
 
-test: $(OBJ)
-		$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+$(LIBFILE): $(OBJS)
+	ar -cvq $(LIBFILE) $(OBJS)
+
+lib: $(LIBFILE)
+	mv $(LIBFILE) $(LDIR)
+
+
+test: $(OBJS) obj
+	cd test; make;
 
 
 clean:
