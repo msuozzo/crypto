@@ -5,3 +5,7 @@
 .*.swp
 
 specs
+.vagrant
+.vimrc
+bootstrap.sh
+Vagrantfile
