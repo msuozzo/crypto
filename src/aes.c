@@ -128,7 +128,8 @@ void free_output_buffer(byte *output_buffer) {
  * On Success: returns the number of bytes written to ct_buffer
  * On Error: returns -1
  */
-ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv, aes_key_len_t key_len, aes_mode_t mode, byte *ct_buffer) {
+ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
+    aes_key_len_t key_len, aes_mode_t mode, byte *ct_buffer) {
   // Select key length and initialize length-dependent values
   int Nk, Nr;
   byte *key_sched;
@@ -182,6 +183,7 @@ exit:
 }
 
 
-ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv, aes_key_len_t key_len, aes_mode_t mode, byte *pt_buffer) {
+ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv,
+    aes_key_len_t key_len, aes_mode_t mode, byte *pt_buffer) {
   return 0;
 }

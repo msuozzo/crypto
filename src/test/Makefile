@@ -23,6 +23,7 @@ $(ODIR)/%.o: %.c $(DEPS) obj
 
 test: $(OBJS) obj
 	$(CC) -o $@ $(OBJS) $(CFLAGS)
+	python openssl_tests.py
 
 clean:
-	rm -f $(ODIR)/*.o *~ core $(IDIR)/*~ 
+	rm -f $(ODIR)/*.o *~ $(IDIR)/*~ test

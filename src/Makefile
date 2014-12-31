@@ -36,4 +36,4 @@ test: $(OBJS) obj
 
 
 clean:
-		rm -f $(ODIR)/*.o *~ core $(IDIR)/*~ 
+		rm -f $(ODIR)/*.o *~ $(IDIR)/*~ $(LDIR)/$(LIBFILE)
