@@ -104,10 +104,66 @@ void encrypt_block(byte *sbox, byte *key, int Nr) {
 }
 
 /*
+ * Implements a single decryption block
+ *
+ * sbox -- state array initialized to the ciphertext of the block
+ * key  -- key schedule for decryption of byte-length 4 * Nb * (Nr + 1)
+ * Nr   -- number of rounds associated with the key length (e.g. 10, 12, 14)
+ *
+ * On Success: sbox is populated with decrypted plaintext
+ * On Error: No error case
+ */
+void decrypt_block(byte *sbox, byte *key, int Nr) {
+  int r, i, shift_ind;
+  byte *tmp, *s, *sp;
+  // temporary sboxes
+  byte tmp_sbox1[16] = {0};
+  byte tmp_sbox2[16] = {0};
+  s = tmp_sbox1;
+  sp = tmp_sbox2;
+  // AddRoundKey
+  for (i = 0; i < 16; i++)
+    s[i] = sbox[i] ^ key[16*Nr + i];
+  for (r = Nr - 1; r >= 1; r--) {
+    // InvSubBytes, InvShiftRows, and AddRoundKey
+    for (i = 0; i < 16; i++) {
+      shift_ind = (i + 16 - (i % 4 * 4)) % 16;
+      sp[i] = inv_sub_bytes(s[shift_ind]) ^ key[16*r + i];
+    }
+    tmp = s;
+    s = sp;
+    sp = tmp;
+    // InvMixColumns
+    for (i = 0; i < 16; i++) {
+      if (i % 4 == 0)
+        sp[i] = gf_mult(0xe, s[i]) ^ gf_mult(0xb, s[i+1]) ^
+                gf_mult(0xd, s[i+2]) ^ gf_mult(0x9, s[i+3]);
+      else if (i % 4 == 1)
+        sp[i] = gf_mult(0x9, s[i-1]) ^ gf_mult(0xe, s[i]) ^
+                gf_mult(0xb, s[i+1]) ^ gf_mult(0xd, s[i+2]);
+      else if (i % 4 == 2)
+        sp[i] = gf_mult(0xd, s[i-2]) ^ gf_mult(0x9, s[i-1]) ^
+                gf_mult(0xe, s[i]) ^ gf_mult(0xb, s[i+1]);
+      else if (i % 4 == 3)
+        sp[i] = gf_mult(0xb, s[i-3]) ^ gf_mult(0xd, s[i-2]) ^
+                gf_mult(0x9, s[i-1]) ^ gf_mult(0xe, s[i]);
+    }
+    tmp = s;
+    s = sp;
+    sp = tmp;
+  }
+  // InvSubBytes, InvShiftRows, and AddRoundKey
+  for (i = 0; i < 16; i++) {
+    shift_ind = (i + 16 - (i % 4 * 4)) % 16;
+    sbox[i] = inv_sub_bytes(s[shift_ind]) ^ key[i];
+  }
+}
+
+/*
  * Allocates buffer of necessary size to hold
  */
 byte *allocate_output_buffer(size_t in_length, aes_mode_t mode) {
-  return malloc(BLK_BYTES * (1 + in_length / BLK_BYTES));
+  return calloc(BLK_BYTES * (1 + in_length / BLK_BYTES), 1);
 }
 
 void free_output_buffer(byte *output_buffer) {
@@ -149,7 +205,7 @@ ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
     fprintf(stderr, "Cannot encrypt 0 bytes\n");
     goto exit;
   }
-  // Allocate output array and populate with plaintext
+  // Populate output array with plaintext
   // PKCS#7 scheme used for padding -- all padding bytes equal to the number of
   // padding bytes (e.g. ...01, ...02 02, ...03 03 03, ...04 04 04 04, etc.)
   size_t ct_length = BLK_BYTES * (1 + pt_length / BLK_BYTES);
@@ -175,6 +231,7 @@ ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
     fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
     goto free_buffers;
   }
+  free(key_sched);
   return ct_length;
 free_buffers:
   free(key_sched);
@@ -183,7 +240,80 @@ exit:
 }
 
 
+/*
+ * Implements the AES decryption function
+ *
+ * ciphertext -- byte array to be decrypted
+ * ct_length  -- length of ciphertext in bytes
+ * key        -- byte array of encryption key
+ * iv         -- initialization vector, ignored if the mode does not require one
+ * key_len    -- enum value of the key length in bits (e.g. 128, 192, etc.)
+ * mode       -- enum value of the decryption mode (e.g. ECB, CBC, etc.)
+ * pt_buffer  -- byte array allocated by call to allocate_output_buffer
+ *
+ * On Success: returns the number of bytes written to pt_buffer
+ * On Error: returns -1
+ */
 ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv,
     aes_key_len_t key_len, aes_mode_t mode, byte *pt_buffer) {
-  return 0;
+  // Select key length and initialize length-dependent values 
+  int Nk, Nr;
+  byte *key_sched;
+  if (key_len == AES_128) {
+    Nk = 4;
+  } else if (key_len == AES_192) {
+    Nk = 6;
+  } else if (key_len == AES_256) {
+    Nk = 8;
+  } else {
+    fprintf(stderr, "Unsupported aes_key_len_t provided: %d\n", mode);
+    goto exit;
+  }
+  Nr = Nk + 6;
+  // Validate plaintext size
+  if (ct_length == 0) {
+    fprintf(stderr, "Cannot decrypt 0 bytes\n");
+    goto exit;
+  }
+  // Populate output array with ciphertext
+  int i;
+  for (i = 0; i < ct_length; i++)
+    pt_buffer[i] = ciphertext[i];
+  // Generate key schedule
+  key_sched = malloc(4 * Nb * (Nr+1));
+  expand_key(key, key_sched, Nk);
+  // Process each block
+  byte *sbox;
+  if (mode == AES_ECB) {
+    for (i = 0; i < ct_length / BLK_BYTES; i++) {
+      sbox = pt_buffer + BLK_BYTES * i;
+      decrypt_block(sbox, key_sched, Nr);
+    }
+  } else if (mode == AES_CBC) {
+    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
+    goto free_buffers;
+  } else {
+    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
+    goto free_buffers;
+  }
+  // Validate decryption by stripping padding
+  byte padding_bytes = pt_buffer[ct_length - 1];
+  if (padding_bytes > BLK_BYTES) {
+    goto padding_err;
+  }
+  for (i = ct_length - 1; i > (ct_length - padding_bytes - 1); i--) {
+    if (pt_buffer[i] != padding_bytes) {
+      goto padding_err;
+    }
+    // zero out padding bytes
+    pt_buffer[i] = 0;
+  }
+  free(key_sched);
+  return ct_length - padding_bytes;
+padding_err:
+  fprintf(stderr, "Padding corrupted\n");
+free_buffers:
+  free(key_sched);
+exit:
+  return -1;
 }
