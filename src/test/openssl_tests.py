@@ -4,7 +4,7 @@ from random import Random
 
 
 key_lens = (128, 192, 256)
-modes = ("ecb",)
+modes = ("ecb", "cbc")
 cipher_format = "-aes-%d-%s"
 
 test_cases = (
@@ -26,15 +26,28 @@ openssl_format = "openssl enc %s"
 test_format = "./test %s"
 str_to_hex = lambda s: "".join(map(lambda c: hex(ord(c)).split("x")[1].rjust(2, "0"), s))
 def diff_openssl(input_, key, cipher, iv=None):
-  args = "-e %s -K %s" % (cipher, key)
-  if iv is not None:
-    args += " -iv %s" % iv
-  p = Popen(test_format % args, stdin=PIPE, stdout=PIPE, shell=True)
-  test_output = p.communicate(input_)[0]
-  p = Popen(openssl_format % args, stdin=PIPE, stdout=PIPE, shell=True)
-  openssl_output = p.communicate(input_)[0]
-  return test_output == openssl_output
-
+  # Build args
+  args = "%s -K %s" % (cipher, key_hex)
+  if iv_hex is not None:
+    args += " -iv %s" % iv_hex
+  # Test Encryption
+  enc_args = "-e %s" % args
+  p = Popen(test_format % enc_args, stdin=PIPE, stdout=PIPE, shell=True)
+  test_encrypted = p.communicate(input_)[0]
+  p = Popen(openssl_format % enc_args, stdin=PIPE, stdout=PIPE, shell=True)
+  openssl_encrypted = p.communicate(input_)[0]
+  if not test_encrypted == openssl_encrypted:
+    return "encryption", input_
+  # Test Decryption
+  dec_args = "-d %s" % args
+  p = Popen(test_format % dec_args, stdin=PIPE, stdout=PIPE, shell=True)
+  test_output = p.communicate(test_encrypted)[0]
+  p = Popen(openssl_format % dec_args, stdin=PIPE, stdout=PIPE, shell=True)
+  openssl_output = p.communicate(openssl_encrypted)[0]
+  if not test_output == openssl_output:
+    return "decryption", test_encrypted
+  # If no errors occur, return None
+  return None, None
 
 # converts an integral value to a 2-character hex representation padded at the
 # left with 0s to represent length bits
@@ -54,47 +67,19 @@ for mode in modes:
     for input_ in test_cases:
       key_hex = get_bits_as_hex(key_len)
       cipher = cipher_format % (key_len, mode)
-      iv_hex = get_hex_bits(32) if mode == "cbc" else None
-      # Test Encryption
-      args = "%s %s -K %s" % ("-e", cipher, key_hex)
-      if iv_hex is not None:
-        args += " -iv %s" % iv_hex
-      p = Popen(test_format % args, stdin=PIPE, stdout=PIPE, shell=True)
-      test_encrypted = p.communicate(input_)[0]
-      p = Popen(openssl_format % args, stdin=PIPE, stdout=PIPE, shell=True)
-      openssl_encrypted = p.communicate(input_)[0]
-      if not test_encrypted == openssl_encrypted:
+      iv_hex = get_bits_as_hex(128) if mode == "cbc" else None
+      err_op, err_input = diff_openssl(input_, key_hex, cipher, iv_hex)
+      if err_op is not None:
         print "=== FAIL TEST ==="
-        print "op     :  encryption"
+        print "op     : ", err_op
         print "mode   : ", mode
         print "key len: ", key_len
         print "key    : ", key_hex
-        print "input  : ", str_to_hex(input_)
+        print "input  : ", str_to_hex(err_input)
         print "IV     : ", iv_hex
         fail_fname = "fail%s.in" % cipher
         with open(fail_fname, "wb") as f:
-          f.write(input_)
-        print "Binary input written to file '%s'" % fail_fname
-        sys.exit(1)
-      # Test Decryption
-      args = "%s %s -K %s" % ("-d", cipher, key_hex)
-      if iv_hex is not None:
-        args += " -iv %s" % iv_hex
-      p = Popen(test_format % args, stdin=PIPE, stdout=PIPE, shell=True)
-      test_output = p.communicate(test_encrypted)[0]
-      p = Popen(openssl_format % args, stdin=PIPE, stdout=PIPE, shell=True)
-      openssl_output = p.communicate(openssl_encrypted)[0]
-      if not test_output == openssl_output:
-        print "=== FAIL TEST ==="
-        print "op     :  decryption"
-        print "mode   : ", mode
-        print "key len: ", key_len
-        print "key    : ", key_hex
-        print "input  : ", str_to_hex(test_encrypted)
-        print "IV     : ", iv_hex
-        fail_fname = "fail%s.in" % cipher
-        with open(fail_fname, "wb") as f:
-          f.write(test_encrypted)
+          f.write(err_input)
         print "Binary input written to file '%s'" % fail_fname
         sys.exit(1)
     print "=== END %d ===" % key_len

@@ -209,7 +209,7 @@ ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
   // PKCS#7 scheme used for padding -- all padding bytes equal to the number of
   // padding bytes (e.g. ...01, ...02 02, ...03 03 03, ...04 04 04 04, etc.)
   size_t ct_length = BLK_BYTES * (1 + pt_length / BLK_BYTES);
-  int i;
+  int i, j;
   for (i = 0; i < pt_length; i++)
     ct_buffer[i] = plaintext[i];
   for (; i < ct_length; i++)
@@ -225,8 +225,14 @@ ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
       encrypt_block(sbox, key_sched, Nr);
     }
   } else if (mode == AES_CBC) {
-    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
-    goto free_buffers;
+    byte *prev_block = iv;
+    for (i = 0; i < ct_length / BLK_BYTES; i++) {
+      sbox = ct_buffer + BLK_BYTES * i;
+      for (j = 0; j < 16; j++)
+        sbox[j] ^= prev_block[j];
+      encrypt_block(sbox, key_sched, Nr);
+      prev_block = sbox;
+    }
   } else {
     fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
     goto free_buffers;
@@ -276,7 +282,7 @@ ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv,
     goto exit;
   }
   // Populate output array with ciphertext
-  int i;
+  int i, j;
   for (i = 0; i < ct_length; i++)
     pt_buffer[i] = ciphertext[i];
   // Generate key schedule
@@ -290,8 +296,14 @@ ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv,
       decrypt_block(sbox, key_sched, Nr);
     }
   } else if (mode == AES_CBC) {
-    fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
-    goto free_buffers;
+    byte *prev_block = iv;
+    for (i = 0; i < ct_length / BLK_BYTES; i++) {
+      sbox = pt_buffer + BLK_BYTES * i;
+      decrypt_block(sbox, key_sched, Nr);
+      for (j = 0; j < 16; j++)
+        sbox[j] ^= prev_block[j];
+      prev_block = ciphertext + BLK_BYTES * i;
+    }
   } else {
     fprintf(stderr, "Unsupported aes_mode_t provided: %d\n", mode);
     goto free_buffers;

@@ -5,6 +5,28 @@
 #include <ctype.h>
 
 
+int hex_to_bin(char *hex_str, byte *output) {
+  int i;
+  char tmp;
+  for (i = 0; i < strlen(hex_str); i++) {
+    tmp = tolower(hex_str[i]);
+    if (tmp < 58 && tmp >= 48) {
+      // digits 0-9
+      tmp -= 48;
+    } else if (tmp < 103 && tmp >= 97) {
+      // lowercase a-f
+      tmp -= 87;
+    } else {
+      return 1;
+    }
+    if (i % 2 == 0)
+      tmp <<= 4;
+    output[i/2] |= tmp;
+  }
+  return 0;
+}
+
+
 int main(int argc, char **argv) {
   // parse args
   char *in_fname = NULL, *out_fname = NULL, *key_hex = NULL, *iv_hex = NULL;
@@ -75,47 +97,22 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Key incorrect length\n");
     goto usage;
   }
-  char tmp;
   byte *key = calloc(1, key_size);
-  for (i = 0; i < key_strlen; i++) {
-    tmp = tolower(key_hex[i]);
-    if (tmp < 58 && tmp >= 48) {
-      // digits 0-9
-      tmp -= 48;
-    } else if (tmp < 103 && tmp >= 97) {
-      // lowercase a-f
-      tmp -= 87;
-    } else {
-      fprintf(stderr, "Error parsing key: ");
-      goto invalid_hex;
-    }
-    if (i % 2 == 0)
-      tmp <<= 4;
-    key[i/2] |= tmp;
+  if (hex_to_bin(key_hex, key)) {
+    fprintf(stderr, "Error parsing key: ");
+    goto invalid_hex;
   }
-  // ensure iv is hex
+  // If IV necessary, parse and validate
   byte *iv;
   if (mode == AES_CBC) {
     if (!iv_hex) {
       fprintf(stderr, "No IV provided\n");
       goto usage;
     }
-    iv = malloc(32);
-    for (i = strlen(iv_hex) - 1; i >= 0; i--) {
-      tmp = tolower(iv_hex[i]);
-      if (tmp < 58 && tmp >= 48) {
-        // digits 0-9
-        tmp -= 48;
-      } else if (tmp < 103 && tmp >= 97) {
-        // lowercase a-f
-        tmp -= 87;
-      } else {
-        fprintf(stderr, "Error parsing iv: ");
-        goto invalid_hex;
-      }
-      if (i % 2 == 0)
-        tmp <<= 4;
-      iv[i/2] &= tmp;
+    iv = calloc(1, 16);
+    if (hex_to_bin(iv_hex, iv)) {
+      fprintf(stderr, "Error parsing key: ");
+      goto invalid_hex;
     }
   }
   // open file handles, default to standard IO streams
@@ -200,7 +197,7 @@ int main(int argc, char **argv) {
 
 // Error handling
 invalid_hex:
-  fprintf(stderr, "Invalid hex digit '%c'\n", tmp);
+  fprintf(stderr, "Invalid hex digit\n");
   goto err;
 invalid_arg:
   fprintf(stderr, "Invalid argument: %s\n", argv[i]);
