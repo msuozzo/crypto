@@ -38,6 +38,9 @@ int main(int argc, char **argv) {
   char op = 0;  // either e for encrypt or d for decrypt
   int i;
   char *next;
+  if (argc <= 1) {
+    goto usage;
+  }
   for (i = 1; i < argc; i++) {
     if (!strcmp("-e", argv[i]) || !strcmp("-d", argv[i])) {
       if (op) {
@@ -103,8 +106,9 @@ int main(int argc, char **argv) {
     goto invalid_hex;
   }
   // If IV necessary, parse and validate
+  int has_iv = mode == AES_CBC;
   byte *iv;
-  if (mode == AES_CBC) {
+  if (has_iv) {
     if (!iv_hex) {
       fprintf(stderr, "No IV provided\n");
       goto usage;
@@ -148,7 +152,7 @@ int main(int argc, char **argv) {
       free(tmp_input);
     } else if (!feof(in_file)) {
       perror("Error reading input file");
-      goto err;
+      goto free_input;
     } else {
       break;
     }
@@ -161,15 +165,24 @@ int main(int argc, char **argv) {
     bytes_processed = aes_encrypt(input, total_read, key, iv, key_len, mode, output);
     if (bytes_processed < 0) {
       fprintf(stderr, "Encryption failed\n");
-      goto err;
+      goto free_input;
     }
   } else {
     bytes_processed = aes_decrypt(input, total_read, key, iv, key_len, mode, output);
     if (bytes_processed < 0) {
       fprintf(stderr, "Decryption failed\n");
-      goto err;
+      goto free_input;
     }
   }
+  memset(key, 0, key_size);
+  free(key);
+  if (has_iv) {
+    memset(iv, 0, 16);
+    free(iv);
+  }
+  memset(input, 0, input_capacity);
+  free(input);
+
   size_t bytes_written = 0;
   size_t total_written = 0;
   while (total_written != bytes_processed) {
@@ -202,22 +215,20 @@ invalid_hex:
 invalid_arg:
   fprintf(stderr, "Invalid argument: %s\n", argv[i]);
   goto err;
+free_input:
+  memset(input, 0, input_capacity);
+  free(input);
+free_iv:
+  if (has_iv) {
+    memset(iv, 0, 16);
+    free(iv);
+  }
+free_key:
+  memset(key, 0, key_size);
+  free(key);
+  goto err;
 usage:
   fprintf(stderr, "Incorrect Usage.\n");
 err:
   return 1;
-//  byte pt[1] = {'1'};
-//
-//  byte key[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
-//  byte *ciphertext = aes_encrypt(pt, 1, key, 128);
-
-//  byte key[32] = {0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81, 0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4};
-//  byte *ciphertext = aes_encrypt(pt, 1, key, 256);
-  
-//  byte key[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
-//  byte pt[16] = {0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34};
-//  byte *ciphertext = aes_encrypt(pt, 16, key, AES_128, AES_ECB);
-
-  //printf("%d\n", sub_bytes(0x53));
 }
-
