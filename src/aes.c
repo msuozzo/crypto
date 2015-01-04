@@ -205,6 +205,9 @@ ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
     fprintf(stderr, "Cannot encrypt 0 bytes\n");
     goto exit;
   }
+  // Generate key schedule
+  key_sched = malloc(4 * Nb * (Nr+1));
+  expand_key(key, key_sched, Nk);
   // Populate output array with plaintext
   // PKCS#7 scheme used for padding -- all padding bytes equal to the number of
   // padding bytes (e.g. ...01, ...02 02, ...03 03 03, ...04 04 04 04, etc.)
@@ -214,9 +217,6 @@ ssize_t aes_encrypt(byte *plaintext, size_t pt_length, byte *key, byte *iv,
     ct_buffer[i] = plaintext[i];
   for (; i < ct_length; i++)
     ct_buffer[i] = ct_length - pt_length;
-  // Generate key schedule
-  key_sched = malloc(4 * Nb * (Nr+1));
-  expand_key(key, key_sched, Nk);
   // Process each block
   byte *sbox;
   if (mode == AES_ECB) {
@@ -281,13 +281,13 @@ ssize_t aes_decrypt(byte *ciphertext, size_t ct_length, byte *key, byte *iv,
     fprintf(stderr, "Cannot decrypt 0 bytes\n");
     goto exit;
   }
+  // Generate key schedule
+  key_sched = malloc(4 * Nb * (Nr+1));
+  expand_key(key, key_sched, Nk);
   // Populate output array with ciphertext
   int i, j;
   for (i = 0; i < ct_length; i++)
     pt_buffer[i] = ciphertext[i];
-  // Generate key schedule
-  key_sched = malloc(4 * Nb * (Nr+1));
-  expand_key(key, key_sched, Nk);
   // Process each block
   byte *sbox;
   if (mode == AES_ECB) {
