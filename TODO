@@ -1,0 +1,4 @@
+AES decrypt optimizations
+md5-based profiling versioning
+CTR mode
+'valgrind --error-exitcode=1' addition to unittests
