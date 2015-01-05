@@ -16,12 +16,12 @@ OBJS=$(patsubst %,$(ODIR)/%,$(_OBJS))
 
 
 all: test
-.PHONY: clean obj
+.PHONY: clean
 
-$(ODIR)/%.o: %.c $(DEPS) obj
+$(ODIR)/%.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-test: $(OBJS) obj
+test: $(OBJS)
 	$(CC) -o $@ $(OBJS) $(CFLAGS)
 	python openssl_tests.py
 

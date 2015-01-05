@@ -25,12 +25,6 @@ void expand_key(byte *key, byte *expansion, int Nk) {
       expansion[4*i+1] = expansion[4*(i-Nk)+1] ^ sub_bytes(temp_word[2]);
       expansion[4*i+2] = expansion[4*(i-Nk)+2] ^ sub_bytes(temp_word[3]);
       expansion[4*i+3] = expansion[4*(i-Nk)+3] ^ sub_bytes(temp_word[0]);
-      // Possible alternate implementation
-//      temp = sub_bytes(temp_word[1]) << 24
-//        & sub_bytes(temp_word[2]) << 16
-//        & sub_bytes(temp_word[3]) << 8
-//        & sub_bytes(temp_word[0]);
-//      temp ^= rcon << 24;
     } else if (Nk > 6 && i % Nk == 4) {
       expansion[4*i] = expansion[4*(i-Nk)] ^ sub_bytes(temp_word[0]);
       expansion[4*i+1] = expansion[4*(i-Nk)+1] ^ sub_bytes(temp_word[1]);
@@ -42,7 +36,6 @@ void expand_key(byte *key, byte *expansion, int Nk) {
       expansion[4*i+2] = expansion[4*(i-Nk)+2] ^ temp_word[2];
       expansion[4*i+3] = expansion[4*(i-Nk)+3] ^ temp_word[3];
     }
-    //expansion[4*i] = expansion[4*(i-Nk)] ^ temp;
   }
 }
 

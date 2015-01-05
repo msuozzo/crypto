@@ -6,7 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_TEST_SIZE (1<<20)
+#define NUM_INPUT_LENGTHS 21
+#define MAX_TEST_SIZE (1<<(NUM_INPUT_LENGTHS - 1))
 
 
 int main(int argc, char **argv) {
@@ -66,16 +67,18 @@ int profile_aes(unsigned int num_trials) {
   byte *dec_output = allocate_output_buffer(MAX_TEST_SIZE, AES_ECB);
   byte *key = test_bytes;
   unsigned long long *enc_times = calloc(num_trials, sizeof(unsigned long long));
-  unsigned long long *dec_times = calloc(num_trials, sizeof(unsigned long long));;
-  unsigned long long trimmed_median;
-  size_t bytes;
+  unsigned long long *dec_times = calloc(num_trials, sizeof(unsigned long long));
+  unsigned long long enc_trimmed_medians[NUM_INPUT_LENGTHS];
+  unsigned long long dec_trimmed_medians[NUM_INPUT_LENGTHS];
+  size_t bytes, test_size;
   for (key_len = AES_128; key_len <= AES_256; key_len++) {
     for (mode = AES_ECB; mode <= AES_CBC; mode++) {
       byte_position = test_bytes;
-      for (i = 1; i <= MAX_TEST_SIZE; i<<=1) {
+      for (i = 0; i < NUM_INPUT_LENGTHS; i++) {
+        test_size = 1 << i;
         for (j = 0; j < num_trials; j++) {
           start_timing();
-          if ((bytes = aes_encrypt(byte_position, i, key, key, key_len, mode, enc_output)) < 0) {
+          if ((bytes = aes_encrypt(byte_position, test_size, key, key, key_len, mode, enc_output)) < 0) {
             fprintf(stderr, "Failed\n");
             return 1;
           }
@@ -89,12 +92,12 @@ int profile_aes(unsigned int num_trials) {
           // advance to next random segment
           byte_position += i;
         }
-        trimmed_median = get_trimmed_median(enc_times, num_trials);
-        printf("0xec, %d, %d, %d, %1.9f\n",
-            key_len, mode, i, 1.0*trimmed_median/1000000000.0);
-        trimmed_median = get_trimmed_median(dec_times, num_trials);
-        printf("0xdc, %d, %d, %d, %1.9f\n",
-            key_len, mode, i, 1.0*trimmed_median/1000000000.0);
+        enc_trimmed_medians[i] = get_trimmed_median(enc_times, num_trials);
+        printf("0xec, %d, %d, %d, %llu\n",
+            key_len, mode, i, enc_trimmed_medians[i]);
+        dec_trimmed_medians[i] = get_trimmed_median(dec_times, num_trials);
+        printf("0xdc, %d, %d, %d, %llu\n",
+            key_len, mode, i, dec_trimmed_medians[i]);
       }
     }
   }
